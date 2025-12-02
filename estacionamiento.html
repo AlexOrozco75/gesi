@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Estacionamiento Central</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .parking-map-container {
+            position: relative;
+            background-color: #333;
+            border: 8px solid #4a4a4a;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            padding: 24px;
+        }
+
+        .parking-space {
+            position: relative;
+            border: 4px dashed #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            font-weight: bold;
+            color: white;
+            transition: transform 0.3s ease-in-out, background-color 0.3s ease-in-out;
+            border-radius: 8px;
+            height: 120px;
+        }
+
+        .parking-space.free {
+            background-color: #28a745;
+        }
+
+        .parking-space.occupied {
+            background-color: #dc3545;
+        }
+
+        .parking-space.maintenance {
+            background-color: #ffc107;
+        }
+
+        .parking-space:hover {
+            transform: scale(1.05);
+        }
+
+        .space-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 0.8rem;
+            color: #ccc;
+        }
+
+        .status-icon {
+            font-size: 3rem;
+            line-height: 1;
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBQsED9726WvSbkUs3dhRLSZh2QqlRmaIE",
+            authDomain: "estacionamientoitc.firebaseapp.com",
+            databaseURL: "https://estacionamientoitc-default-rtdb.firebaseio.com",
+            projectId: "estacionamientoitc",
+            storageBucket: "estacionamientoitc.firebasestorage.app",
+            messagingSenderId: "38266365378",
+            appId: "1:38266365378:web:9a3c9a726fcb1eb845a25b",
+            measurementId: "G-6P8X0N8E4J"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const auth = getAuth(app);
+        signInAnonymously(auth)
+            .then(() => console.log('Autenticación anónima exitosa'))
+            .catch((error) => console.error('Error en autenticación:', error));
+
+        const parkingRef = ref(database, 'parking');
+        const parkingMap = document.getElementById('parkingMap');
+
+        function createParkingSpaceElement(id, status) {
+            const spaceElement = document.createElement('div');
+            spaceElement.id = `space${id}`;
+            spaceElement.className = 'parking-space';
+
+            const statusInfo = document.createElement('span');
+            statusInfo.className = 'status-info';
+
+            const spaceLabel = document.createElement('span');
+            spaceLabel.className = 'space-label';
+            spaceLabel.textContent = `P-${id}`;
+
+            switch (status) {
+                case 'Libre':
+                    spaceElement.classList.add('free');
+                    statusInfo.innerHTML = '🟢';
+                    break;
+                case 'Ocupado':
+                    spaceElement.classList.add('occupied');
+                    statusInfo.innerHTML = '🔴';
+                    break;
+                case 'Mantenimiento':
+                    spaceElement.classList.add('maintenance');
+                    statusInfo.innerHTML = '🟡';
+                    break;
+                default:
+                    spaceElement.classList.add('unknown');
+                    statusInfo.innerHTML = '❓';
+            }
+            
+            spaceElement.innerHTML = `<span class="status-icon">${statusInfo.innerHTML}</span><br><span>${status || 'Desconocido'}</span>`;
+            spaceElement.appendChild(spaceLabel);
+            return spaceElement;
+        }
+
+        onValue(parkingRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById('freeSpaces').textContent = data.free_spaces || 0;
+                document.getElementById('occupiedSpaces').textContent = data.occupied_spaces || 0;
+                document.getElementById('totalSpaces').textContent = data.total_spaces || 0;
+
+                parkingMap.innerHTML = '';
+                if (data.spaces) {
+                    const spaceIds = Object.keys(data.spaces).sort((a, b) => parseInt(a) - parseInt(b));
+                    spaceIds.forEach(id => {
+                        const status = data.spaces[id].status;
+                        const spaceElement = createParkingSpaceElement(id, status);
+                        parkingMap.appendChild(spaceElement);
+                    });
+                }
+                
+                const anySpace = data.spaces && data.spaces[Object.keys(data.spaces)[0]];
+                const lastUpdated = anySpace && anySpace.last_updated;
+                if (lastUpdated) {
+                    document.getElementById('lastUpdate').textContent = new Date(lastUpdated).toLocaleString('es-MX', {
+                        hour: '2-digit', minute: '2-digit', hour12: true, day: '2-digit', month: '2-digit', year: 'numeric'
+                    });
+                    document.getElementById('statusMessage').classList.remove('hidden');
+                }
+            }
+        });
+        
+        parkingRef.onDisconnect().remove();
+    </script>
+</head>
+<body class="bg-gray-900 font-sans text-white">
+    <div class="container mx-auto p-4">
+        <h1 class="text-4xl font-bold text-center mb-6 text-blue-400">🚗 Estacionamiento Central</h1>
+        <h2 class="text-xl text-center mb-8 text-gray-400">Sistema de Monitoreo en Tiempo Real</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center transform hover:scale-105 transition duration-300">
+                <span id="freeSpaces" class="text-5xl font-bold text-green-400">0</span>
+                <p class="text-lg text-gray-300 mt-2">Espacios Libres</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center transform hover:scale-105 transition duration-300">
+                <span id="occupiedSpaces" class="text-5xl font-bold text-red-400">0</span>
+                <p class="text-lg text-gray-300 mt-2">Ocupados</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center transform hover:scale-105 transition duration-300">
+                <span id="totalSpaces" class="text-5xl font-bold text-gray-400">0</span>
+                <p class="text-lg text-gray-300 mt-2">Total</p>
+            </div>
+        </div>
+
+        <div class="parking-map-container mx-auto rounded-lg mb-10">
+            <h3 class="text-2xl font-semibold text-center mb-4 text-gray-200 col-span-full">Plano del Estacionamiento</h3>
+            <div id="parkingMap" class="grid grid-cols-1 md:grid-cols-3 gap-4 justify-center col-span-full">
+                </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-gray-800 border-l-4 border-green-400 p-6 rounded-lg shadow-md">
+                <span class="text-4xl">🟢</span>
+                <p class="font-semibold mt-3 text-lg text-green-400">Libre</p>
+            </div>
+            <div class="bg-gray-800 border-l-4 border-red-400 p-6 rounded-lg shadow-md">
+                <span class="text-4xl">🔴</span>
+                <p class="font-semibold mt-3 text-lg text-red-400">Ocupado</p>
+            </div>
+            <div class="bg-gray-800 border-l-4 border-yellow-400 p-6 rounded-lg shadow-md">
+                <span class="text-4xl">🟡</span>
+                <p class="font-semibold mt-3 text-lg text-yellow-400">Mantenimiento</p>
+            </div>
+        </div>
+
+        <div id="statusMessage" class="mt-8 text-center text-lg text-gray-500 hidden">
+            Última actualización: <span id="lastUpdate"></span>
+        </div>
+    </div>
+</body>
+</html>
